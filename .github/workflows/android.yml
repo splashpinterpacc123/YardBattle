@@ -1,0 +1,37 @@
+name: Build YardBattle APK
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Android Project Structure
+        run: |
+          # Создаем структуру папок
+          mkdir -p jni/src
+          mkdir -p assets
+          
+          # Раскладываем твои файлы
+          cp main.cxx jni/src/main.cpp
+          cp Android.mk jni/
+          cp Application.mk jni/
+          # Копируем ресурсы из твоей папки "ресурсы" в общую папку assets
+          cp ресурсы/* assets/ 2>/dev/null || true
+
+      - name: Download SDL2 Libraries
+        run: |
+          cd jni
+          # Скачиваем и распаковываем библиотеки прямо в папку jni
+          wget -q https://www.libsdl.org/release/SDL2-2.28.5.tar.gz && tar -xf SDL2-2.28.5.tar.gz && mv SDL2-2.28.5 SDL2
+          wget -q https://www.libsdl.org/projects/SDL_image/release/SDL2_image-2.8.2.tar.gz && tar -xf SDL2_image-2.8.2.tar.gz && mv SDL2_image-2.8.2 SDL2_image
+          wget -q https://www.libsdl.org/projects/SDL_mixer/release/SDL2_mixer-2.8.0.tar.gz && tar -xf SDL2_mixer-2.8.0.tar.gz && mv SDL2_mixer-2.8.0 SDL2_mixer
+          wget -q https://www.libsdl.org/projects/SDL_ttf/release/SDL2_ttf-2.22.0.tar.gz && tar -xf SDL2_ttf-2.22.0.tar.gz && mv SDL2_ttf-2.22.0 SDL2_ttf
+
+      - name: Build with ndk-build
+        run: |
+          # Запускаем сборку из папки jni
+          # Флаг APP_ALLOW_MISSING_DEPS=true поможет, если какая-то мелкая зависимость не найдется
+          ndk-build NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=jni/Android.mk APP_ALLOW_MISSING_DEPS=true
