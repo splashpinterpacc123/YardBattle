@@ -1,0 +1,56 @@
+name: Build YardBattle APK
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25c
+          add-to-path: true
+
+      - name: Prepare Files
+        run: |
+          rm -rf jni assets
+          mkdir -p jni/src jni/sdl_all assets
+          cp main.cxx jni/src/main.cpp
+          # Исправляем инклуды: убираем SDL2/ и меняем <> на ""
+          sed -i 's|<SDL2/||g' jni/src/main.cpp
+          sed -i 's|>||g' jni/src/main.cpp
+          sed -i 's|#include <|#include "|g' jni/src/main.cpp
+          cp ресурсы/* assets/ 2>/dev/null || true
+
+      - name: Download SDL2
+        run: |
+          cd jni/sdl_all
+          wget -q https://www.libsdl.org/release/SDL2-2.28.5.tar.gz && tar -xf SDL2-2.28.5.tar.gz
+          wget -q https://www.libsdl.org/projects/SDL_image/release/SDL2_image-2.8.2.tar.gz && tar -xf SDL2_image-2.8.2.tar.gz
+          wget -q https://www.libsdl.org/projects/SDL_mixer/release/SDL2_mixer-2.8.0.tar.gz && tar -xf SDL2_mixer-2.8.0.tar.gz
+          wget -q https://www.libsdl.org/projects/SDL_ttf/release/SDL2_ttf-2.22.0.tar.gz && tar -xf SDL2_ttf-2.22.0.tar.gz
+
+      - name: Create Android.mk
+        run: |
+          cat <<EOF > jni/Android.mk
+          LOCAL_PATH := \$(call my-dir)
+          include \$(LOCAL_PATH)/sdl_all/SDL2-2.28.5/Android.mk
+          include \$(LOCAL_PATH)/sdl_all/SDL2_image-2.8.2/Android.mk
+          include \$(LOCAL_PATH)/sdl_all/SDL2_mixer-2.8.0/Android.mk
+          include \$(LOCAL_PATH)/sdl_all/SDL2_ttf-2.22.0/Android.mk
+          include \$(CLEAR_VARS)
+          LOCAL_MODULE := main
+          LOCAL_SRC_FILES := src/main.cpp
+          LOCAL_SHARED_LIBRARIES := SDL2 SDL2_image SDL2_mixer SDL2_ttf
+          LOCAL_LDLIBS := -llog -lGLESv2
+          include \$(BUILD_SHARED_LIBRARY)
+          EOF
+
+      - name: Build
+        run: |
+          # Используем переменные окружения GitHub вместо $(pwd)
+          export NDK_MODULE_PATH=$GITHUB_WORKSPACE/jni/sdl_all
+          ndk-build NDK_PROJECT_PATH=$GITHUB_WORKSPACE APP_BUILD_SCRIPT=$GITHUB_WORKSPACE/jni/Android.mk APP_PLATFORM=android-21
